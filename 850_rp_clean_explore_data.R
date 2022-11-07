@@ -133,7 +133,7 @@ enrolls <- list(enroll_2014, enroll_2015, enroll_2016, enroll_2017, enroll_2018,
 
 # use common colnames for each df
 enrollnames <- names(enroll_2014)
-lapply(enrolls, function(x) {names(x)=enrollnames})
+enrolls <- lapply(enrolls, setNames, enrollnames)
 # add year var
 enrolls <- Map(transform, enrolls, year = unlist(years))
 
@@ -232,7 +232,7 @@ namelist <- str_replace(namelist, "_2015","_next_year")
 namelist <- str_replace(namelist, "2015","_next_year")
 
 # change names, add year variable
-lapply(xwalks, function(x) {names(x)=namelist})
+xwalks <- lapply(xwalks, setNames, namelist)
 xwalks <- Map(transform, xwalks, year = unlist(years))
 
 xwalk <- rbind.fill(xwalks)
