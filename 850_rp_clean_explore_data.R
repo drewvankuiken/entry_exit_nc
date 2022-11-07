@@ -247,7 +247,7 @@ save(enroll_nc,file=here(data,"enrollment.Rda"))
 save(benefits_nc,file=here(data,"benefits.Rda"))
 save(network_nc,file=here(data,"networks.Rda"))
 save(plan_attributes_nc,file=here(data,"plan_attributes.Rda"))
-save(service_area_nc,file=here(data,"service_areas"))
+save(service_area_nc,file=here(data,"service_areas.Rda"))
 save(xwalk_nc,file=here(data,"plan_crosswalk.Rda"))
 ################################################################################
 ################################################################################
