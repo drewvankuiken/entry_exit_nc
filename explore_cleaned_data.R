@@ -7,12 +7,12 @@
 # split into separate maintenance file and only run once
 
 # package installer - will install packages you haven't already installed
-library(here)
-library(plyr)
-need <- c('tidyverse','plyr','ggplot2','broom','lubridate','readxl','glue')
+need <- c('here','tidyverse','ggplot2','broom','lubridate','readxl','glue','dplyr','plyr')
 have <- need %in% rownames(installed.packages())
 if(any(!have)) install.packages(need[!have])
 invisible(lapply(need,library,character.only=T))
+# ugly solution for the moment, but here() keeps going to wrong place
+detach("package:here", unload=TRUE)
 
 # change path to root directory:
 ### OVERALL DIRECTORY STRUCTURE: 
@@ -25,6 +25,7 @@ setwd(glue('{script_folder}'))
 setwd('..')
 rm(list = ls())
 options(scipen = 999)
+library(here)
 
 # subfolders that we wanna use eventually
 rawdata <- here('raw_data')
@@ -79,7 +80,7 @@ plan_attrib_light <- plan_attributes_nc[plan_attributes_nc$MarketCoverage == "In
 # test if merge key is unique
 uniques <- plan_attrib_light %>%
   group_by(StandardComponentId, BusinessYear) %>%
-  summarize(n=n())
+  dplyr::summarize(n=n())
 max(uniques$n) # all set
 
 enroll_attrib <- enroll_pl %>%
@@ -93,7 +94,7 @@ areas <- service_area_nc %>%
   select(BusinessYear, IssuerId, ServiceAreaId, ServiceAreaName, CoverEntireState,
          County) %>% distinct() %>% 
   group_by(BusinessYear, IssuerId, ServiceAreaId, ServiceAreaName, CoverEntireState) %>%
-  summarize(num_counties=n())
+  dplyr::summarize(num_counties=n())
 
 # add the number of counties for the moment
 # TODO: Calculate number of options by county excluding dental plans
@@ -108,10 +109,44 @@ networks <- network_nc %>%
   select(BusinessYear, IssuerId, NetworkName, NetworkId) %>% 
   distinct() 
 
+# "final" dataset for the moment
 enroll <- enroll_areas %>% 
   left_join(networks, by = c("year" = "BusinessYear", 
                              "issuer_hios_id" = "IssuerId", 
                              "NetworkId" = "NetworkId"))
+
+# some hypotheses to test:
+# are statewide plans 'worse'?
+#-------------------------------------------------------------------------------
+# county coverage dataset
+load(here(data,"ACS.Rda"))
+
+# process service areas dataset to merge with county coverage dataset
+# issuerId version
+# subset to plans that exist in the puf
+areas_num <- issuers %>%
+  left_join(service_area_nc, by = c("ISSUER_ID" = "IssuerId"))
+
+areas_wide <- areas_num %>%
+  select(BusinessYear, ISSUER_ID, #ServiceAreaId, CoverEntireState,
+         County) %>%
+  mutate(flag=1, County = replace_na(as.double(County), 37000)) %>%
+  group_by(BusinessYear, County) %>%
+  distinct() %>%
+  dplyr::mutate(issuer_num = cumsum(flag), num_issuers = n()) %>%
+  pivot_wider(names_from = issuer_num, names_prefix = "issuer_", values_from = ISSUER_ID)
+
+# merge on ACS data
+issuer_acs <- areas_wide %>%
+  left_join(acs_shell, by = c("BusinessYear" = "year", "County" = "fullfips"))
+
+lm(num_issuers ~ mean_inc + mean_age, data=issuer_acs)
+# to add: population, anything else we can grab from ACS data
+# lagged num of issuers in t-1
+# can set up transition matrices
+
+sorted_acs_iss <- issuer_acs %>%
+  arrange(County, BusinessYear)
 
 #-------------------------------------------------------------------------------
 ####
