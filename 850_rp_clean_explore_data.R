@@ -7,10 +7,13 @@
 # split into separate maintenance file and only run once
 
 # package installer - will install packages you haven't already installed
-need <- c('tidyverse','ggplot2','broom','lubridate','dplyr','plyr','readxl','glue', 'here')
+library('plyr')
+need <- c('tidyverse','ggplot2','broom','lubridate','dplyr','readxl','glue', 'here')
 have <- need %in% rownames(installed.packages())
 if(any(!have)) install.packages(need[!have])
 invisible(lapply(need,library,character.only=T))
+# ugly solution for the moment, but here() keeps going to wrong place
+detach("package:here", unload=TRUE)
 
 # change path to root directory:
 ### OVERALL DIRECTORY STRUCTURE: 
@@ -23,6 +26,7 @@ setwd(glue('{script_folder}'))
 setwd('..')
 rm(list = ls())
 options(scipen = 999)
+library(here)
 
 # subfolders that we wanna use eventually
 rawdata <- here('raw_data')
@@ -141,6 +145,45 @@ enrolls <- Map(transform, enrolls, year = unlist(years))
 enroll <- rbind.fill(enrolls)
 enroll_nc <- enroll[enroll$tenant_id=="NC", ]
 length(unique(enroll_nc$selected_insurance_plan))
+
+################################################################################
+# Issuer level enrollment data - Plan Level
+enroll_2014_issuer <- read_excel(here(rawdata,
+                               'CMS Issuer Level Enrollment Data/2014-Issuer-Data-Final_10_25.xlsx'), sheet = "2014 Issuer")
+enroll_2015_issuer <- read_excel(here(rawdata,
+                               'CMS Issuer Level Enrollment Data/2015 Issuer Data Final_.xlsx'), sheet = "2015 Issuer")
+enroll_2016_issuer <- read_excel(here(rawdata,
+                               'CMS Issuer Level Enrollment Data/2016-Issuer-Enrollment-Disenrollment-Report.xlsx'), sheet = "M2_S")
+enroll_2017_issuer <- read_excel(here(rawdata,
+                               'CMS Issuer Level Enrollment Data/2017 Enrollment Disenrollment PUF.xlsx'),
+                          skip=1, sheet = "QHP Ever Enrolled Details")
+enroll_2018_issuer <- read_excel(here(rawdata,
+                               'CMS Issuer Level Enrollment Data/2018-Enrollment-Disenrollment-PUF.xlsx'),
+                          skip=1, sheet = "QHP Ever Enrolled Details")
+enroll_2019_issuer <- read_excel(here(rawdata,
+                               'CMS Issuer Level Enrollment Data/2019-Enrollment-Disenrollment-PUF.xlsx'),
+                          skip=1, sheet = "QHP Ever Enrolled Details")
+enroll_2020_issuer <- read_excel(here(rawdata,
+                               'CMS Issuer Level Enrollment Data/2020-Enrollment-Disenrollment-PUF.xlsx'),
+                          skip=1, sheet = "QHP Ever Enrolled Details")
+# will add common year var below
+enroll_2014_issuer <- subset(enroll_2014_issuer, select=-c(coverage_year_number))
+enroll_2015_issuer <- subset(enroll_2015_issuer, select=-c(coverage_year_number))
+
+enrolls_issuer <- list(enroll_2014_issuer, enroll_2015_issuer, enroll_2016_issuer,
+                       enroll_2017_issuer, enroll_2018_issuer, enroll_2019_issuer, 
+                       enroll_2020_issuer)
+
+# use common colnames for each df
+enrollnames_issuer <- names(enroll_2014_issuer)
+enrolls_issuer <- lapply(enrolls_issuer, setNames, enrollnames_issuer)
+# add year var
+enrolls_issuer <- Map(transform, enrolls_issuer, year = unlist(years))
+
+### stack
+enroll_issuer <- rbind.fill(enrolls_issuer)
+enroll_nc_issuer <- enroll_issuer[enroll_issuer$tenant_id=="NC", ]
+length(unique(enroll_nc_issuer$selected_insurance_plan))
 ################################################################################
 # Benefits and Cost Sharing
 
@@ -244,6 +287,7 @@ xwalk_nc <- xwalk[xwalk$State=="NC",]
 save(puf_1,file=here(data,"puf_1.Rda"))
 save(puf_2,file=here(data,"puf_2.Rda"))
 save(enroll_nc,file=here(data,"enrollment.Rda"))
+save(enroll_nc_issuer, file=here(data,"enrollment_issuer.Rda"))
 save(benefits_nc,file=here(data,"benefits.Rda"))
 save(network_nc,file=here(data,"networks.Rda"))
 save(plan_attributes_nc,file=here(data,"plan_attributes.Rda"))
