@@ -161,6 +161,39 @@ acs_cms <- enroll_nc_issuer %>% drop_na(plcy_county_fips_code) %>%
   # drop fips code starting with 42 
   subset(plcy_county_fips_code != "42101")
 
+# some hypotheses to test:
+# are statewide plans 'worse'?
+#-------------------------------------------------------------------------------
+# county coverage dataset
+load(here(data,"ACS.Rda"))
+
+# process service areas dataset to merge with county coverage dataset
+# issuerId version
+# subset to plans that exist in the puf
+areas_num <- issuers %>%
+  left_join(service_area_nc, by = c("ISSUER_ID" = "IssuerId"))
+
+areas_wide <- areas_num %>%
+  select(BusinessYear, ISSUER_ID, #ServiceAreaId, CoverEntireState,
+         County) %>%
+  mutate(flag=1, County = replace_na(as.double(County), 37000)) %>%
+  group_by(BusinessYear, County) %>%
+  distinct() %>%
+  dplyr::mutate(issuer_num = cumsum(flag), num_issuers = n()) %>%
+  pivot_wider(names_from = issuer_num, names_prefix = "issuer_", values_from = ISSUER_ID)
+
+# merge on ACS data
+issuer_acs <- areas_wide %>%
+  left_join(acs_shell, by = c("BusinessYear" = "year", "County" = "fullfips"))
+
+lm(num_issuers ~ mean_inc + mean_age, data=issuer_acs)
+# to add: population, anything else we can grab from ACS data
+# lagged num of issuers in t-1
+# can set up transition matrices
+
+sorted_acs_iss <- issuer_acs %>%
+  arrange(County, BusinessYear)
+
 #-------------------------------------------------------------------------------
 # enrollment at county-plan level
 

@@ -39,6 +39,7 @@ data <- here('data')
 # create dataset to merge onto
 # bc ACS reports fips for state and county separately, create 2 columns:
 # full fips (merge to CMS data), county fips (no leading zeros)
+
 # fullfips <- seq(37001,37199,2)
 # statefips <- seq(1,199,2)
 # fipsdf_noyear <- data.frame(fullfips,statefips) %>% uncount(7)
@@ -47,10 +48,10 @@ data <- here('data')
 # yeardf <- data.frame(year= rep(years, times = 100))
 # 
 # fipsdf <- data.frame(fipsdf_noyear, yeardf)
-
 #-------------------------------------------------------------------------------
 # read in ACS, merge to fipsdf
 ddi <- read_ipums_ddi(here(rawdata,"ACS/usa_00002.xml"))
+
 data_acs <- read_ipums_micro(ddi)
 # coerce to puma xwalk format:
 data_acs$PUMA <- sprintf("%05d",data$PUMA)
