@@ -40,6 +40,8 @@ load(here(data,"enrollment.Rda"))
 load(here(data,"networks.Rda"))
 # for now, focus on PUF 2, which has actual data instead of projected
 load(here(data, "puf_2.Rda"))
+load(here(data,"ACS.Rda"))
+#load(here(data,"benefits.Rda"))
 
 # this is useful, grab components to merge to other datasets from here:
 ## grab deduped list of issuers
@@ -114,6 +116,50 @@ enroll <- enroll_areas %>%
   left_join(networks, by = c("year" = "BusinessYear", 
                              "issuer_hios_id" = "IssuerId", 
                              "NetworkId" = "NetworkId"))
+#-------------------------------------------------------------------------------
+# enrollment at county-plan level
+load(here(data,"enrollment_issuer.Rda"))
+
+# calculate market size excluding outside option: 
+marketsize <- enroll_nc_issuer %>%
+  drop_na(plcy_county_fips_code) %>% na_if("*") %>%
+  mutate(ever_enrolled_plan_sel = replace_na(ever_enrolled_plan_sel,"0")) %>%
+  group_by(plcy_county_fips_code, year) %>%
+  dplyr::summarise(tot_enroll = sum(as.double(ever_enrolled_plan_sel))) %>%
+  mutate(lag_tot_enroll = lag(tot_enroll))
+
+# process service areas dataset to merge with county coverage dataset
+# issuerId version
+# subset to plans that exist in the puf
+areas_num <- issuers %>%
+  left_join(service_area_nc, by = c("ISSUER_ID" = "IssuerId"))
+
+areas_wide <- areas_num %>%
+  select(BusinessYear, ISSUER_ID, #ServiceAreaId, CoverEntireState,
+         County) %>%
+  mutate(flag=1, County = replace_na(as.double(County), 37000)) %>%
+  group_by(BusinessYear, County) %>%
+  distinct() %>%
+  dplyr::mutate(issuer_num = cumsum(flag), num_issuers = n()) %>%
+  pivot_wider(names_from = issuer_num, names_prefix = "issuer_", values_from = ISSUER_ID)
+
+# merge on ACS data
+issuer_acs <- areas_wide %>%
+  mutate(County = as.character(County),
+         multiple_issuers = num_issuers > 1) %>%
+  left_join(acs, by = c("BusinessYear" = "YEAR", "County" = "fips")) %>%
+  drop_na(PUMA5CE)
+
+# merge issuer_acs 
+acs_cms <- enroll_nc_issuer %>% drop_na(plcy_county_fips_code) %>%
+  left_join(issuer_acs, 
+            by = c("year" = "BusinessYear", 
+                   "plcy_county_fips_code" = "County")) %>%
+  left_join(marketsize, by = c("year","plcy_county_fips_code" )) %>%
+  mutate(s0 = (tot_enroll / (tot_enroll+num_outside))) %>%
+  group_by(plcy_county_fips_code, year) %>% mutate(lag_s0 = lag(s0)) %>%
+  # drop fips code starting with 42 
+  subset(plcy_county_fips_code != "42101")
 
 # some hypotheses to test:
 # are statewide plans 'worse'?
@@ -149,6 +195,79 @@ sorted_acs_iss <- issuer_acs %>%
   arrange(County, BusinessYear)
 
 #-------------------------------------------------------------------------------
+# enrollment at county-plan level
+
+simple_reg <- lm(num_issuers ~ mean_inc + mean_age + mean_edu + 
+                   shr_non_white + shr_female + shr_private_hc + shr_unempl, data=acs_cms)
+# to add: population, anything else we can grab from ACS data
+# lagged num of issuers in t-1
+# can set up transition matrices
+summary(simple_reg)
+
+shr_hs_reg <- lm(num_issuers ~ mean_inc + mean_age + shr_finish_hs + 
+                   shr_non_white + shr_female + shr_private_hc + shr_unempl, data=acs_cms)
+# to add: population, anything else we can grab from ACS data
+# lagged num of issuers in t-1
+# can set up transition matrices
+summary(shr_hs_reg)
+
+# adding nonlinear income effects
+nonlinear <- lm(num_issuers ~ poly(mean_inc,2) + mean_age + mean_edu + 
+                  shr_non_white + shr_female + shr_private_hc + shr_unempl, data=acs_cms)
+summary(nonlinear)
+
+allow_reg <- lm(num_issuers ~ mean_age + shr_female, data=issuer_acs)
+summary(allow_reg)
+
+### logit for multiple issuers. BCBS always issuer 1 in analysis df anyway
+### need to think about how to regress on proportions
+logit_simple <- glm(multiple_issuers ~ mean_inc + mean_age + mean_edu + 
+                      shr_non_white + shr_female + shr_private_hc + shr_unempl, 
+                    data=acs_cms, family="binomial")
+summary(logit_simple)
+
+logit_nonlininc <- glm(multiple_issuers ~ poly(mean_inc,2) + mean_age + 
+                         mean_edu + shr_non_white + shr_female + 
+                         shr_private_hc + shr_unempl, 
+                       data=acs_cms,family="binomial")
+summary(logit_nonlininc)
+
+# last year's outside good share as predictor
+logit_s0 <- glm(multiple_issuers ~ mean_inc + mean_age + 
+                  shr_non_white + shr_female + 
+                  shr_private_hc + shr_unempl + lag_s0 + factor(year), 
+                data=acs_cms[acs_cms$year>=2015,],family="binomial")
+summary(logit_s0)
+
+
+# more descriptive stuff
+table(issuer_acs$BusinessYear, issuer_acs$num_issuers)
+
+#-------------------------------------------------------------------------------
+# by issuer: 
+issuer_regs <- 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#-------------------------------------------------------------------------------
+
 ####
 # maybe need crosswalk first? ended up being not useful
 load(here(data, "plan_crosswalk.Rda"))
